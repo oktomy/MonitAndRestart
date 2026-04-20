@@ -1,0 +1,51 @@
+name: Build and Release .NET Framework App
+
+# 設定觸發條件：當推送以 'v' 開頭的標籤 (Tag) 時才會執行，例如 v1.0.0
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build-and-release:
+    # 由於是 .NET Framework 4.7.2，必須使用 Windows 環境
+    runs-on: windows-latest
+
+    steps:
+    # 1. 取得最新程式碼
+    - name: Checkout Code
+      uses: actions/checkout@v4
+
+    # 2. 設定 MSBuild 環境
+    - name: Setup MSBuild
+      uses: microsoft/setup-msbuild@v2
+
+    # 3. 設定 NuGet 環境
+    - name: Setup NuGet
+      uses: NuGet/setup-nuget@v2
+
+    # 4. 還原 NuGet 套件
+    - name: Restore NuGet Packages
+      run: nuget restore MonitAndRestart.sln
+
+    # 5. 使用 MSBuild 進行 Release 建置
+    - name: Build the Solution
+      run: msbuild MonitAndRestart.sln /p:Configuration=Release /p:Platform="Any CPU"
+
+    # 6. 將編譯好的執行檔與相關檔案壓縮成 ZIP 檔
+    - name: Create ZIP Archive
+      # 這裡使用 PowerShell 指令打包。請確認來源路徑正確
+      run: Compress-Archive -Path MonitAndRestart\bin\Release\* -DestinationPath MonitAndRestart_Release.zip
+
+    # 7. 自動建立 GitHub Release 並上傳 ZIP 檔
+    - name: Create GitHub Release
+      uses: softprops/action-gh-release@v2
+      with:
+        files: MonitAndRestart_Release.zip
+        # 自動使用觸發此 Action 的 Tag 作為版本名稱
+        name: Release ${{ github.ref_name }}
+        draft: false
+        prerelease: false
+        generate_release_notes: true # 自動從 Commit 紀錄產生發布說明
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
